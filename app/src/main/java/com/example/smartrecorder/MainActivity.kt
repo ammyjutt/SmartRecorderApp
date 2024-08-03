@@ -2,17 +2,16 @@ package com.example.smartrecorder
 
 import android.Manifest
 import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.MediaRecorder
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
-import android.content.ContextWrapper
-import android.content.Context
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
 class MainActivity : Activity() {
 
-    private var mediaRecorder: MediaRecorder? = null
     private var isRecording = false
     private lateinit var recordButton: Button
     private val requestCode = 200
@@ -25,65 +24,43 @@ class MainActivity : Activity() {
 
         recordButton.setOnClickListener {
             if (isRecording) {
-                stopRecording()
+                stopRecordingService()
+                recordButton.text = "Start Recording"
             } else {
-                startRecording()
+                checkAndRequestPermissions()
             }
         }
-
-        checkAndRequestPermissions()
     }
 
     private fun checkAndRequestPermissions() {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), requestCode)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)  != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), requestCode)
+        } else {
+            startRecordingService()
         }
-    }
-
-    private fun startRecording() {
-        val fileName = "${getExternalFilesDir(null)?.absolutePath}/audiorecordtest.3gp"
-        mediaRecorder = MediaRecorder().apply {
-            setAudioSource(MediaRecorder.AudioSource.MIC)
-            setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
-            setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
-            setOutputFile(fileName)
-            try {
-                prepare()
-                start()
-                Log.d("SmartRecorder", "Recording started at $fileName")
-                recordButton.text = "Stop Recording"
-                isRecording = true
-            } catch (e: Exception) {
-                Log.e("SmartRecorder", "Failed to start recording", e)
-                release()
-            }
-        }
-    }
-
-    private fun stopRecording() {
-        try {
-            mediaRecorder?.apply {
-                stop()
-                release()
-            }
-            mediaRecorder = null
-            Log.d("SmartRecorder", "Recording stopped")
-        } catch (e: Exception) {
-            Log.e("SmartRecorder", "Failed to stop recording", e)
-        }
-        recordButton.text = "Start Recording"
-        isRecording = false
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         if (requestCode == this.requestCode) {
-            if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
-                // Permission granted
-                Log.d("SmartRecorder", "Record audio permission granted")
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startRecordingService()
             } else {
-                // Permission denied
-                Log.d("SmartRecorder", "Record audio permission denied")
+                Log.e("MainActivity", "Record audio permission denied")
             }
         }
+    }
+
+    private fun startRecordingService() {
+        val serviceIntent = Intent(this, RecordingService::class.java)
+        ContextCompat.startForegroundService(this, serviceIntent)
+        isRecording = true
+        recordButton.text = "Stop Recording"
+        Log.d("MainActivity", "Started Recording Service")
+    }
+
+    private fun stopRecordingService() {
+        val serviceIntent = Intent(this, RecordingService::class.java)
+        stopService(serviceIntent)
+        isRecording = false
     }
 }
